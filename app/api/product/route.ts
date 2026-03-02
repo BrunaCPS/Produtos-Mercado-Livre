@@ -42,7 +42,10 @@ export async function GET(request: NextRequest) {
   let data: MLItem;
   try {
     const response = await fetch(`https://api.mercadolibre.com/items/${itemId}`, {
-      headers: { "Accept": "application/json" },
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; produtos-ml/1.0)",
+      },
       next: { revalidate: 0 },
     });
 
