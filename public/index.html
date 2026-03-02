@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Produtos Mercado Livre</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+
+    header img { width: 48px; }
+
+    h1 { font-size: 1.6rem; color: #333; }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 2rem;
+      width: 100%;
+      max-width: 640px;
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #555; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge-ok  { background: #d4edda; color: #155724; }
+    .badge-no  { background: #f8d7da; color: #721c24; }
+
+    .btn {
+      display: inline-block;
+      padding: 0.6rem 1.4rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-meli   { background: #ffe600; color: #333; }
+    .btn-danger { background: #dc3545; color: #fff; font-size: 0.8rem; padding: 0.4rem 1rem; }
+    .btn-primary { background: #3483fa; color: #fff; }
+
+    .search-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .search-row input {
+      flex: 1;
+      padding: 0.6rem 0.9rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    #result { margin-top: 1.5rem; }
+
+    #result pre {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      max-height: 420px;
+    }
+
+    .product-summary {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .product-summary img {
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      border: 1px solid #eee;
+      border-radius: 6px;
+    }
+
+    .product-summary .info h3 { font-size: 1rem; margin-bottom: 0.4rem; }
+    .product-summary .info .price { font-size: 1.25rem; font-weight: 700; color: #3483fa; }
+
+    .alert {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+    }
+    .alert-danger  { background: #f8d7da; color: #721c24; }
+    .alert-warning { background: #fff3cd; color: #856404; }
+    .alert-info    { background: #cce5ff; color: #004085; }
+
+    #loading { display: none; color: #888; font-size: 0.9rem; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 Produtos Mercado Livre</h1>
+</header>
+
+<!-- Auth card -->
+<div class="card">
+  <h2>Conexão com Mercado Livre</h2>
+  <div id="auth-status" style="margin-bottom:1rem;">Verificando…</div>
+  <div id="auth-actions"></div>
+</div>
+
+<!-- Product lookup card -->
+<div class="card">
+  <h2>Buscar Produto</h2>
+  <div class="search-row">
+    <input
+      type="text"
+      id="query"
+      placeholder="URL do produto ou ID (ex: MLB12345678)"
+      autocomplete="off"
+    />
+    <button class="btn btn-primary" onclick="searchProduct()">Buscar</button>
+  </div>
+  <div id="loading">Buscando…</div>
+  <div id="result"></div>
+</div>
+
+<script>
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  const params = new URLSearchParams(window.location.search);
+  const authMsg = params.get('auth');
+  const errorMsg = params.get('error');
+
+  async function checkAuth() {
+    try {
+      const res = await fetch('/auth/status');
+      const data = await res.json();
+      renderAuthState(data.authenticated);
+    } catch {
+      renderAuthState(false);
+    }
+  }
+
+  function renderAuthState(authenticated) {
+    const statusEl  = document.getElementById('auth-status');
+    const actionsEl = document.getElementById('auth-actions');
+
+    if (authenticated) {
+      statusEl.innerHTML = '<span class="badge badge-ok">✓ Conectado</span>';
+      actionsEl.innerHTML = `
+        <button class="btn btn-danger" onclick="logout()">Desconectar</button>`;
+    } else {
+      statusEl.innerHTML = '<span class="badge badge-no">✗ Não conectado</span>';
+      actionsEl.innerHTML = `
+        <a class="btn btn-meli" href="/auth/login">Conectar com Mercado Livre</a>`;
+    }
+
+    if (authMsg === 'success') {
+      statusEl.insertAdjacentHTML('afterend',
+        '<div class="alert alert-info" style="margin-top:.5rem">Autenticado com sucesso!</div>');
+    } else if (errorMsg) {
+      statusEl.insertAdjacentHTML('afterend',
+        `<div class="alert alert-danger" style="margin-top:.5rem">Erro: ${escHtml(errorMsg)}</div>`);
+    }
+  }
+
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST' });
+    renderAuthState(false);
+  }
+
+  // ── Product search ────────────────────────────────────────────────────────
+
+  async function searchProduct() {
+    const q = document.getElementById('query').value.trim();
+    const resultEl  = document.getElementById('result');
+    const loadingEl = document.getElementById('loading');
+
+    if (!q) {
+      resultEl.innerHTML = '<div class="alert alert-warning">Digite uma URL ou ID de produto.</div>';
+      return;
+    }
+
+    resultEl.innerHTML = '';
+    loadingEl.style.display = 'block';
+
+    try {
+      const res = await fetch(`/api/product?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      loadingEl.style.display = 'none';
+
+      if (!res.ok) {
+        resultEl.innerHTML = `<div class="alert alert-danger">${escHtml(data.error || 'Erro desconhecido.')}</div>`;
+        if (data.authUrl) {
+          resultEl.innerHTML += `<p style="margin-top:.75rem"><a class="btn btn-meli" href="${data.authUrl}">Conectar com Mercado Livre</a></p>`;
+        }
+        return;
+      }
+
+      renderProduct(data);
+    } catch (err) {
+      loadingEl.style.display = 'none';
+      resultEl.innerHTML = '<div class="alert alert-danger">Falha na comunicação com o servidor.</div>';
+    }
+  }
+
+  function renderProduct(data) {
+    const resultEl = document.getElementById('result');
+    const thumb = data.thumbnail ? `<img src="${escHtml(data.thumbnail)}" alt="produto" />` : '';
+    const price = data.price != null
+      ? `<span class="price">R$ ${Number(data.price).toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>`
+      : '';
+
+    resultEl.innerHTML = `
+      <div class="product-summary">
+        ${thumb}
+        <div class="info">
+          <h3>${escHtml(data.title || data.id)}</h3>
+          ${price}
+          <p style="font-size:.85rem;color:#888;margin-top:.3rem">ID: ${escHtml(data.id)}</p>
+          ${data.permalink
+            ? `<a href="${escHtml(data.permalink)}" target="_blank" rel="noopener"
+                 style="font-size:.85rem;color:#3483fa">Ver no Mercado Livre ↗</a>`
+            : ''}
+        </div>
+      </div>
+      <details style="margin-top:1rem">
+        <summary style="cursor:pointer;font-size:.85rem;color:#888">Dados completos (JSON)</summary>
+        <pre>${escHtml(JSON.stringify(data, null, 2))}</pre>
+      </details>`;
+  }
+
+  // ── Utilities ─────────────────────────────────────────────────────────────
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Allow pressing Enter to search.
+  document.getElementById('query').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchProduct();
+  });
+
+  // Bootstrap.
+  checkAuth();
+</script>
+</body>
+</html>
